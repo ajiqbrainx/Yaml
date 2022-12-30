@@ -1,0 +1,64 @@
+pipeline {
+    agent any
+   environment {
+    registry = "ajiqbrainx/helm"  
+    registryCredential = '71736dd3-a7e6-430b-9307-e813bdbcbf84'
+    dockerImage = ''
+    def HELM_APP_NAME = "helmdeploy"
+    def HELM_CHART_DIRECTORY = "helm"
+    def NAMESPACE ="flexcub-testing"
+  }
+
+    tools{
+        gradle 'Gradle'
+      
+    }
+    stages {
+        stage('checkout') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/ajiqbrainx/Helm.git']]])
+            }
+        }
+        stage('build'){
+            steps{
+                bat 'gradle build'
+            }
+        }
+	 stage('Building image') {
+      steps{
+        script {
+          dockerImage = docker.build registry + ":$BUILD_NUMBER"
+        }
+      }
+    }
+    stage('Deploy Image') {
+      steps{
+        script {
+          docker.withRegistry( '', registryCredential ) {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+   
+   
+ stage('Kubectl ') {
+      steps{
+        script {
+         kubeconfig(credentialsId: 'kubecloud', serverUrl: '') {
+         bat 'helm list'
+        try{
+             bat "helm upgrade ${HELM_APP_NAME} ./${HELM_CHART_DIRECTORY} --set image.tag=${BUILD_NUMBER}  --namespace=${NAMESPACE}" 
+            }
+        catch(error){
+            echo "Installing the new helm.."
+             bat "helm install  ${HELM_APP_NAME} ./${HELM_CHART_DIRECTORY} --set image.tag=${BUILD_NUMBER} --namespace=${NAMESPACE}"
+            }
+        }
+        }
+        }
+      } 
+    
+    }
+    
+}

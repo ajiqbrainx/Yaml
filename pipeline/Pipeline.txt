@@ -1,0 +1,61 @@
+pipeline {
+    agent any
+   environment {
+    registry = "ajiqbrainx/pipeline"  
+    registryCredential = '71736dd3-a7e6-430b-9307-e813bdbcbf84'
+    dockerImage = ''
+  }
+
+    tools{
+        gradle 'Gradle'
+      
+    }
+    stages {
+        stage('checkout') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/ajiqbrainx/KubeDeploy.git']]])
+            }
+        }
+        stage('build'){
+            steps{
+                bat 'gradle build'
+            }
+        }
+	 stage('Building image') {
+      steps{
+        script {
+          dockerImage = docker.build registry + ":$BUILD_NUMBER"
+        }
+      }
+    }
+    stage('Deploy Image') {
+      steps{
+        script {
+          docker.withRegistry( '', registryCredential ) {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+   
+   
+ stage('Kubectl ') {
+      steps{
+        script {
+         kubeconfig(credentialsId: 'kubecloud', serverUrl: '') {
+             bat 'kubectl get nodes'
+             bat 'kubectl get namespace'
+             try{
+                bat "kubectl set image deployment/first-deploy pipeline=ajiqbrainx/pipeline:$BUILD_NUMBER --namespace=flexcub-testing"
+             }
+             catch(error){
+                 bat 'kubectl create deployment first-deploy --image=ajiqbrainx/pipeline --namespace=flexcub-testing'
+             }
+     }
+        }
+        }
+      } 
+    
+    }
+    
+}
