@@ -1,0 +1,61 @@
+---
+# Deployment for the Jenkins 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  namespace: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      containers:
+      - name: pvjenkins
+        image: jenkins/jenkins:lts
+        ports:
+          - name: http-port
+            containerPort: 8083
+          - name: jnlp-port
+            containerPort: 50000
+        volumeMounts:
+          - name: jenkins-vol
+            mountPath: /var/jenkins_home/copy_reference_file  # Home Dir of jenkins is mentioned so data of jenkins will persist
+      volumes:
+        - name: jenkins-vol
+          persistentVolumeClaim:
+            claimName: pvjenkins-claim
+---
+#Node Port service for the Jenkins Deployment 
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+  namespace: jenkins
+spec:
+ # type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8083
+   #   nodePort: 33000 # NodePort can be replaced by the LoadBalancer
+  selector:
+    app: jenkins
+---
+# ClusterIP for the Jenkins-jnlp
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-jnlp
+  namespace: jenkins
+spec:
+  type: ClusterIP
+  ports:
+    - port: 50000
+      targetPort: 50000
+  selector:
+    app: jenkins
